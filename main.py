@@ -13,14 +13,22 @@ def setup():
     )
 """)
 
+# MR-01: Modified creating the books table to add the max_copies column
     c.execute("""
     CREATE TABLE IF NOT EXISTS books(
         id INTEGER PRIMARY KEY,
         title TEXT,
         author TEXT,
-        available INTEGER
+        available INTEGER,
+        max_copies INTEGER DEFAULT 1
     )
 """)
+
+# MR-01: Checks if the max_copies column exists in the table or not. Adds the column if it doesn't exist.
+    c.execute("PRAGMA table_info(books)")
+    columns = [row[1] for row in c.fetchall()]
+    if "max_copies" not in columns:
+        c.execute("ALTER TABLE books ADD COLUMN max_copies INTEGER DEFAULT 1")
 
     c.execute("""
     CREATE TABLE IF NOT EXISTS loans(
@@ -37,31 +45,33 @@ def setup():
 
     c.execute(
     "INSERT OR IGNORE INTO members VALUES ('S1','Ali','ACTIVE')"
-)
+    )
 
     c.execute(
     "INSERT OR IGNORE INTO members VALUES ('S2','Sara','ACTIVE')"
-)
+    )
+
+# MR-01: Added a max_copies value to the books table INSERTs
+    c.execute(
+    "INSERT OR IGNORE INTO books VALUES (1, 'Clean Code', 'Robert Martin', 3, 3)"
+    )
 
     c.execute(
-    "INSERT OR IGNORE INTO books VALUES (1,'Clean Code','Robert Martin',1)"
-)
+    "INSERT OR IGNORE INTO books VALUES (2, 'Refactoring','Martin Fowler', 5, 5)"
+    )
 
     c.execute(
-    "INSERT OR IGNORE INTO books VALUES (2,'Refactoring','Martin Fowler',1)"
-)
-
-    c.execute(
-    "INSERT OR IGNORE INTO books VALUES (3,'Design Patterns','Gamma et al.',1)"
-)
+    "INSERT OR IGNORE INTO books VALUES (3, 'Design Patterns', 'Gamma et al.', 1, 1)"
+    )
 
     db.commit()
     return db
 
 def search_books(db, text):
     c = db.cursor()
+# MR-01: Added max_copies to the SELECT
     c.execute(
-    """SELECT id,title,author,available
+    """SELECT id,title,author,available,max_copies
        FROM books
        WHERE title LIKE ? OR author LIKE ?""",
     ("%" + text + "%", "%" + text + "%")
@@ -69,9 +79,10 @@ def search_books(db, text):
 
     rows = c.fetchall()
 
+# MR-01: Removed the bool cast and made the result show the amount of max copies.
     for row in rows:
         print(row[0], row[1], "-", row[2],
-            "Available:", bool(row[3]))
+            "Available:", row[3], "/", row[4])
 
     return rows
 
@@ -107,14 +118,15 @@ def borrow(db, member_id, book_id):
         print("Book is unavailable")
         return False
 
+# MR-01: Modified the check to make sure a member can only borrow one copy of a book
     c.execute(
     """SELECT COUNT(*) FROM loans
-       WHERE member_id=? AND returned=0""",
-    (member_id,)
-)
+       WHERE member_id=? AND returned=0 AND book_id=?""",
+    (member_id, book_id)
+    )
 
-    if c.fetchone()[0] >= 3:
-        print("Borrowing limit reached")
+    if c.fetchone()[0] > 0:
+        print("You already borrowed a copy of this book.")
         return False
 
     today = datetime.now()
@@ -132,10 +144,11 @@ def borrow(db, member_id, book_id):
     )
 )
 
+# MR-01: Decrement available instead of setting it to 0
     c.execute(
-    "UPDATE books SET available=0 WHERE id=?",
+    "UPDATE books SET available = available-1 WHERE id=?",
     (book_id,)
-)
+    )
 
     db.commit()
 
@@ -169,8 +182,9 @@ def return_book(db, member_id, book_id):
         (loan_id,)
     )
 
+# MR-01: Increments available only if it is less than max_copies
     c.execute(
-        "UPDATE books SET available=1 WHERE id=?",
+        "UPDATE books SET available = available+1 WHERE id=? AND available < max_copies",
         (book_id,)
     )
 
