@@ -118,6 +118,16 @@ def borrow(db, member_id, book_id):
         print("Book is unavailable")
         return False
 
+    c.execute(
+        """SELECT COUNT(*) FROM loans
+        WHERE member_id=? AND returned=0""",
+        (member_id,)
+    )
+
+    if c.fetchone()[0] >= 3:
+        print("Borrowing limit reached")
+        return False
+
 # MR-01: Modified the check to make sure a member can only borrow one copy of a book
     c.execute(
     """SELECT COUNT(*) FROM loans
