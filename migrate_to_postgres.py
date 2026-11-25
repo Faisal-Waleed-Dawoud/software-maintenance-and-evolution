@@ -1,4 +1,5 @@
 """One-time script: copy the data from the old SQLite file (library.db) into PostgreSQL."""
+import os
 import sqlite3
 import sys
 import database
@@ -11,6 +12,8 @@ TABLES = [
 
 
 def migrate(sqlite_file="library.db"):
+    if not os.path.exists(sqlite_file):
+        sys.exit("File not found: " + sqlite_file)
     source = sqlite3.connect(sqlite_file)
     target = database.connect()
     database.create_schema(target)
