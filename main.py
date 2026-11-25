@@ -1,67 +1,31 @@
-
-import sqlite3
 from datetime import datetime, timedelta
-DB = "library.db"
+import database
 def setup():
-    db = sqlite3.connect(DB)
+    db = database.connect()
+    database.create_schema(db)
     c = db.cursor()
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS members(
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        status TEXT
-    )
-""")
 
-# MR-01: Modified creating the books table to add the max_copies column
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS books(
-        id INTEGER PRIMARY KEY,
-        title TEXT,
-        author TEXT,
-        available INTEGER,
-        max_copies INTEGER DEFAULT 1
-    )
-""")
-
-# MR-01: Checks if the max_copies column exists in the table or not. Adds the column if it doesn't exist.
-    c.execute("PRAGMA table_info(books)")
-    columns = [row[1] for row in c.fetchall()]
-    if "max_copies" not in columns:
-        c.execute("ALTER TABLE books ADD COLUMN max_copies INTEGER DEFAULT 1")
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS loans(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        member_id TEXT,
-        book_id INTEGER,
-        borrow_date TEXT,
-        due_date TEXT,
-        returned INTEGER
-    )
-""")
-
-    db.commit()
-
+    # Seed members
     c.execute(
-    "INSERT OR IGNORE INTO members VALUES ('S1','Ali','ACTIVE')"
+        "INSERT INTO members VALUES ('S1','Ali','ACTIVE') ON CONFLICT DO NOTHING"
+    )
+    c.execute(
+        "INSERT INTO members VALUES ('S2','Sara','ACTIVE') ON CONFLICT DO NOTHING"
     )
 
-    c.execute(
-    "INSERT OR IGNORE INTO members VALUES ('S2','Sara','ACTIVE')"
-    )
 
-# MR-01: Added a max_copies value to the books table INSERTs
+    # MR-01: Seed books with multiple copies
     c.execute(
-    "INSERT OR IGNORE INTO books VALUES (1, 'Clean Code', 'Robert Martin', 3, 3)"
+        "INSERT INTO books (id, title, author, available, max_copies) "
+        "VALUES (1, 'Clean Code', 'Robert Martin', 3, 3) ON CONFLICT DO NOTHING"
     )
-
     c.execute(
-    "INSERT OR IGNORE INTO books VALUES (2, 'Refactoring','Martin Fowler', 5, 5)"
+        "INSERT INTO books (id, title, author, available, max_copies) "
+        "VALUES (2, 'Refactoring', 'Martin Fowler', 5, 5) ON CONFLICT DO NOTHING"
     )
-
     c.execute(
-    "INSERT OR IGNORE INTO books VALUES (3, 'Design Patterns', 'Gamma et al.', 1, 1)"
+        "INSERT INTO books (id, title, author, available, max_copies) "
+        "VALUES (3, 'Design Patterns', 'Gamma et al.', 1, 1) ON CONFLICT DO NOTHING"
     )
 
     db.commit()
@@ -73,7 +37,7 @@ def search_books(db, text):
     c.execute(
     """SELECT id,title,author,available,max_copies
        FROM books
-       WHERE title LIKE ? OR author LIKE ?""",
+       WHERE LOWER(title) LIKE LOWER(?) OR LOWER(author) LIKE LOWER(?)""",
     ("%" + text + "%", "%" + text + "%")
 )
 
