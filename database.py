@@ -1,6 +1,8 @@
 """database.py - the only module that knows which database the library system uses (PostgreSQL)."""
 import os
 import psycopg2
+from dotenv import load_dotenv
+load_dotenv()
 
 
 class Cursor:
