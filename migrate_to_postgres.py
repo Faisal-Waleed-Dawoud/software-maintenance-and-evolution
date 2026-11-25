@@ -33,10 +33,15 @@ def migrate(sqlite_file="library.db"):
 
     # loans.id is a SERIAL column. Move its counter past the copied ids,
     # otherwise the next new loan would reuse an id that already exists.
-    c.execute(
-        "SELECT setval(pg_get_serial_sequence('loans', 'id'), "
-        "COALESCE(MAX(id), 1), MAX(id) IS NOT NULL) FROM loans"
-    )
+    # Synchronize the SERIAL sequence after importing explicit loan IDs.
+    c.execute("""
+        SELECT setval(
+            pg_get_serial_sequence('loans', 'id'),
+            COALESCE(MAX(id), 1),
+            MAX(id) IS NOT NULL
+        )
+        FROM loans
+    """)
     target.commit()
     target.close()
     source.close()

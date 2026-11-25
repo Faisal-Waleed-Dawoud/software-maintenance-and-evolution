@@ -58,14 +58,23 @@ def create_schema(db):
             status TEXT
         )
     """)
+
     c.execute("""
         CREATE TABLE IF NOT EXISTS books(
             id INTEGER PRIMARY KEY,
             title TEXT,
             author TEXT,
-            available INTEGER
+            available INTEGER,
+            max_copies INTEGER DEFAULT 1
         )
     """)
+
+    # MR-01: Add max_copies to existing databases
+    c.execute("""
+        ALTER TABLE books
+        ADD COLUMN IF NOT EXISTS max_copies INTEGER DEFAULT 1
+    """)
+
     c.execute("""
         CREATE TABLE IF NOT EXISTS loans(
             id SERIAL PRIMARY KEY,
