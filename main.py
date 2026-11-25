@@ -1,77 +1,52 @@
-
-import sqlite3
 from datetime import datetime, timedelta
-DB = "library.db"
+import database
 def setup():
-    db = sqlite3.connect(DB)
+    db = database.connect()
+    database.create_schema(db)
     c = db.cursor()
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS members(
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        status TEXT
+
+    # Seed members
+    c.execute(
+        "INSERT INTO members VALUES ('S1','Ali','ACTIVE') ON CONFLICT DO NOTHING"
     )
-""")
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS books(
-        id INTEGER PRIMARY KEY,
-        title TEXT,
-        author TEXT,
-        available INTEGER
+    c.execute(
+        "INSERT INTO members VALUES ('S2','Sara','ACTIVE') ON CONFLICT DO NOTHING"
     )
-""")
 
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS loans(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        member_id TEXT,
-        book_id INTEGER,
-        borrow_date TEXT,
-        due_date TEXT,
-        returned INTEGER
+
+    # MR-01: Seed books with multiple copies
+    c.execute(
+        "INSERT INTO books (id, title, author, available, max_copies) "
+        "VALUES (1, 'Clean Code', 'Robert Martin', 3, 3) ON CONFLICT DO NOTHING"
     )
-""")
-
-    db.commit()
-
     c.execute(
-    "INSERT OR IGNORE INTO members VALUES ('S1','Ali','ACTIVE')"
-)
-
+        "INSERT INTO books (id, title, author, available, max_copies) "
+        "VALUES (2, 'Refactoring', 'Martin Fowler', 5, 5) ON CONFLICT DO NOTHING"
+    )
     c.execute(
-    "INSERT OR IGNORE INTO members VALUES ('S2','Sara','ACTIVE')"
-)
-
-    c.execute(
-    "INSERT OR IGNORE INTO books VALUES (1,'Clean Code','Robert Martin',1)"
-)
-
-    c.execute(
-    "INSERT OR IGNORE INTO books VALUES (2,'Refactoring','Martin Fowler',1)"
-)
-
-    c.execute(
-    "INSERT OR IGNORE INTO books VALUES (3,'Design Patterns','Gamma et al.',1)"
-)
+        "INSERT INTO books (id, title, author, available, max_copies) "
+        "VALUES (3, 'Design Patterns', 'Gamma et al.', 1, 1) ON CONFLICT DO NOTHING"
+    )
 
     db.commit()
     return db
 
 def search_books(db, text):
     c = db.cursor()
+# MR-01: Added max_copies to the SELECT
     c.execute(
-    """SELECT id,title,author,available
+    """SELECT id,title,author,available,max_copies
        FROM books
-       WHERE title LIKE ? OR author LIKE ?""",
+       WHERE LOWER(title) LIKE LOWER(?) OR LOWER(author) LIKE LOWER(?)""",
     ("%" + text + "%", "%" + text + "%")
 )
 
     rows = c.fetchall()
 
+# MR-01: Removed the bool cast and made the result show the amount of max copies.
     for row in rows:
         print(row[0], row[1], "-", row[2],
-            "Available:", bool(row[3]))
+            "Available:", row[3], "/", row[4])
 
     return rows
 
@@ -108,13 +83,24 @@ def borrow(db, member_id, book_id):
         return False
 
     c.execute(
-    """SELECT COUNT(*) FROM loans
-       WHERE member_id=? AND returned=0""",
-    (member_id,)
-)
+        """SELECT COUNT(*) FROM loans
+        WHERE member_id=? AND returned=0""",
+        (member_id,)
+    )
 
     if c.fetchone()[0] >= 3:
         print("Borrowing limit reached")
+        return False
+
+# MR-01: Modified the check to make sure a member can only borrow one copy of a book
+    c.execute(
+    """SELECT COUNT(*) FROM loans
+       WHERE member_id=? AND returned=0 AND book_id=?""",
+    (member_id, book_id)
+    )
+
+    if c.fetchone()[0] > 0:
+        print("You already borrowed a copy of this book.")
         return False
 
     today = datetime.now()
@@ -132,10 +118,11 @@ def borrow(db, member_id, book_id):
     )
 )
 
+# MR-01: Decrement available instead of setting it to 0
     c.execute(
-    "UPDATE books SET available=0 WHERE id=?",
+    "UPDATE books SET available = available-1 WHERE id=?",
     (book_id,)
-)
+    )
 
     db.commit()
 
@@ -169,8 +156,9 @@ def return_book(db, member_id, book_id):
         (loan_id,)
     )
 
+# MR-01: Increments available only if it is less than max_copies
     c.execute(
-        "UPDATE books SET available=1 WHERE id=?",
+        "UPDATE books SET available = available+1 WHERE id=? AND available < max_copies",
         (book_id,)
     )
 
