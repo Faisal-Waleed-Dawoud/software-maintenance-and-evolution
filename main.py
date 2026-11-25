@@ -1,58 +1,28 @@
-
-import sqlite3
 from datetime import datetime, timedelta
-DB = "library.db"
+import database
 def setup():
-    db = sqlite3.connect(DB)
+    db = database.connect()
+    database.create_schema(db)
     c = db.cursor()
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS members(
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        status TEXT
-    )
-""")
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS books(
-        id INTEGER PRIMARY KEY,
-        title TEXT,
-        author TEXT,
-        available INTEGER
-    )
-""")
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS loans(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        member_id TEXT,
-        book_id INTEGER,
-        borrow_date TEXT,
-        due_date TEXT,
-        returned INTEGER
-    )
-""")
-
-    db.commit()
 
     c.execute(
-    "INSERT OR IGNORE INTO members VALUES ('S1','Ali','ACTIVE')"
+    "INSERT INTO members VALUES ('S1','Ali','ACTIVE') ON CONFLICT DO NOTHING"
 )
 
     c.execute(
-    "INSERT OR IGNORE INTO members VALUES ('S2','Sara','ACTIVE')"
+    "INSERT INTO members VALUES ('S2','Sara','ACTIVE') ON CONFLICT DO NOTHING"
 )
 
     c.execute(
-    "INSERT OR IGNORE INTO books VALUES (1,'Clean Code','Robert Martin',1)"
+    "INSERT INTO books VALUES (1,'Clean Code','Robert Martin',1) ON CONFLICT DO NOTHING"
 )
 
     c.execute(
-    "INSERT OR IGNORE INTO books VALUES (2,'Refactoring','Martin Fowler',1)"
+    "INSERT INTO books VALUES (2,'Refactoring','Martin Fowler',1) ON CONFLICT DO NOTHING"
 )
 
     c.execute(
-    "INSERT OR IGNORE INTO books VALUES (3,'Design Patterns','Gamma et al.',1)"
+    "INSERT INTO books VALUES (3,'Design Patterns','Gamma et al.',1) ON CONFLICT DO NOTHING"
 )
 
     db.commit()
@@ -63,7 +33,7 @@ def search_books(db, text):
     c.execute(
     """SELECT id,title,author,available
        FROM books
-       WHERE title LIKE ? OR author LIKE ?""",
+       WHERE LOWER(title) LIKE LOWER(?) OR LOWER(author) LIKE LOWER(?)""",
     ("%" + text + "%", "%" + text + "%")
 )
 
