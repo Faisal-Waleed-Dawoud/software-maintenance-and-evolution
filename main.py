@@ -1,5 +1,13 @@
 from datetime import datetime, timedelta
 import database
+from library import LibraryRepository
+from models import Member, Book
+
+MAX_LOANS = 3
+LOAN_PERIOD_DAYS = 14
+
+
+
 def setup():
     db = database.connect()
     database.create_schema(db)
@@ -51,82 +59,84 @@ def search_books(db, text):
     return rows
 
 def borrow(db, member_id, book_id):
-    c = db.cursor()
-    c.execute(
-    "SELECT id,status FROM members WHERE id=?",
-    (member_id,)
-)
 
-    member = c.fetchone()
+    with LibraryRepository(db) as library :
 
+        member = library.find_member(member_id)
+        
+        is_valid_member = check_member(member)
+
+        if (not is_valid_member): 
+            return False
+
+        book = library.find_book(book_id)
+
+        is_valid_book = check_book(book)
+        
+        if (not is_valid_book): 
+            return False
+
+        count = library.count_active_loans(member_id)
+
+        is_valid_loans_count = check_active_loans_count(count)
+
+        if (not is_valid_loans_count):
+            return False
+
+        borrowed_copies = library.count_active_loans_for_book(member_id, book_id)
+
+        can_borrow = check_borrowed_copies(borrowed_copies)
+
+        if (not can_borrow): 
+            return False
+
+        today = datetime.now()
+        due = today + timedelta(days=LOAN_PERIOD_DAYS)
+
+        
+        library.create_loan(member_id, book_id, today.isoformat(), due.isoformat())
+
+    print("Book borrowed. Due:", due.date())
+
+    return True
+
+
+
+def check_member(member: Member):
     if not member:
         print("Member not found")
         return False
-
-    if member[1] != "ACTIVE":
+    
+    if not member.is_active():
         print("Member is not active")
-        return False
+        return False 
+    return True
 
-    c.execute(
-    "SELECT available FROM books WHERE id=?",
-    (book_id,)
-)
 
-    book = c.fetchone()
-
+def check_book(book: Book): 
     if not book:
         print("Book not found")
         return False
-
-    if book[0] == 0:
+    
+    if not book.is_available():
         print("Book is unavailable")
         return False
+    
+    return True
 
-    c.execute(
-        """SELECT COUNT(*) FROM loans
-        WHERE member_id=? AND returned=0""",
-        (member_id,)
-    )
+def check_active_loans_count(active_loans): 
+    
 
-    if c.fetchone()[0] >= 3:
+    if active_loans >= MAX_LOANS: 
         print("Borrowing limit reached")
         return False
+    
+    return True
 
-# MR-01: Modified the check to make sure a member can only borrow one copy of a book
-    c.execute(
-    """SELECT COUNT(*) FROM loans
-       WHERE member_id=? AND returned=0 AND book_id=?""",
-    (member_id, book_id)
-    )
-
-    if c.fetchone()[0] > 0:
+def check_borrowed_copies(copies): 
+    if copies > 0: 
         print("You already borrowed a copy of this book.")
         return False
-
-    today = datetime.now()
-    due = today + timedelta(days=14)
-
-    c.execute(
-    """INSERT INTO loans
-       (member_id,book_id,borrow_date,due_date,returned)
-       VALUES(?,?,?,?,0)""",
-    (
-        member_id,
-        book_id,
-        today.isoformat(),
-        due.isoformat()
-    )
-)
-
-# MR-01: Decrement available instead of setting it to 0
-    c.execute(
-    "UPDATE books SET available = available-1 WHERE id=?",
-    (book_id,)
-    )
-
-    db.commit()
-
-    print("Book borrowed. Due:", due.date())
 
     return True
 
@@ -134,7 +144,7 @@ def return_book(db, member_id, book_id):
     c = db.cursor()
     c.execute(
     """SELECT id,due_date FROM loans
-       WHERE member_id=? AND book_id=? AND returned=0""",
+    WHERE member_id=? AND book_id=? AND returned=0""",
     (member_id, book_id)
 )
 

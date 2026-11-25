@@ -37,6 +37,8 @@ class Database:
     def close(self):
         self._connection.close()
 
+    def rollback(self): 
+        self._connection.rollback()
 
 def connect():
     """Open a connection using environment variables (with local defaults)."""
